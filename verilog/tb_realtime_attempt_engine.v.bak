@@ -1,0 +1,963 @@
+`timescale 1ns/1ps
+
+// ============================================================================
+// tb_realtime_attempt_engine.v
+//
+// Self-checking regression for realtime_attempt_engine rev E.
+//
+// Scaled clock-rate parameters are used:
+//
+//     CLK_HZ = 50
+//     rate   = 10
+//
+// which is exactly equivalent in ratio to:
+//
+//     50 MHz / 10 MHz = one attempt every 5 clocks.
+//
+// Tests:
+//   A. 10 MHz-equivalent pacing -> exactly 5-clock sample spacing
+//   B. Free run -> never launches closer than MIN_GAP=5
+//   C. Slow channel -> overrun_count rises
+//   D. No channel response -> timeout_count rises
+//   E. Fast basis scheduler produces both Z/X and match/mismatch events
+//
+// Run:
+//
+//   iverilog -g2005 -o tb_rt \
+//       tb_realtime_attempt_engine.v realtime_attempt_engine.v
+//
+//   vvp tb_rt
+//
+// Expected final line:
+//
+//   === ALL CHECKS PASSED ===
+// ============================================================================
+
+module tb_realtime_attempt_engine;
+
+    // ------------------------------------------------------------------------
+    // Clock
+    // ------------------------------------------------------------------------
+
+    reg clk;
+
+    initial begin
+        clk = 1'b0;
+    end
+
+    always #5 clk =
+        ~clk;
+
+
+    // ------------------------------------------------------------------------
+    // DUT controls
+    // ------------------------------------------------------------------------
+
+    reg rst_n;
+    reg run;
+    reg clear;
+
+    reg [31:0] rate_hz;
+
+
+    // ------------------------------------------------------------------------
+    // Mock channel response
+    // ------------------------------------------------------------------------
+
+    reg ch_click;
+    reg ch_no_click;
+    reg ch_err;
+
+    reg respond_enable;
+
+    integer response_delay;
+
+    integer response_count;
+
+    reg response_pending;
+
+
+    // ------------------------------------------------------------------------
+    // DUT outputs
+    // ------------------------------------------------------------------------
+
+    wire sample_en;
+
+    wire evt_done;
+    wire evt_lost;
+
+    wire evt_basis_match;
+    wire evt_basis_is_z;
+    wire evt_data_error;
+
+    wire [31:0] timeout_count;
+    wire [31:0] overrun_count;
+
+    wire busy;
+
+
+    realtime_attempt_engine #(
+
+        .CLK_HZ(
+            50
+        ),
+
+        .RESULT_TIMEOUT(
+            20
+        ),
+
+        .MIN_GAP(
+            5
+        ),
+
+        .A_BASIS_SEED(
+            32'h1A2B_3C4D
+        ),
+
+        .B_BASIS_SEED(
+            32'hC3D2_E1F0
+        )
+
+    ) dut (
+
+        .clk(
+            clk
+        ),
+
+        .rst_n(
+            rst_n
+        ),
+
+        .run(
+            run
+        ),
+
+        .clear(
+            clear
+        ),
+
+        .rate_hz(
+            rate_hz
+        ),
+
+
+        .ch_click(
+            ch_click
+        ),
+
+        .ch_no_click(
+            ch_no_click
+        ),
+
+        .ch_err(
+            ch_err
+        ),
+
+
+        .sample_en(
+            sample_en
+        ),
+
+
+        .evt_done(
+            evt_done
+        ),
+
+        .evt_lost(
+            evt_lost
+        ),
+
+        .evt_basis_match(
+            evt_basis_match
+        ),
+
+        .evt_basis_is_z(
+            evt_basis_is_z
+        ),
+
+        .evt_data_error(
+            evt_data_error
+        ),
+
+
+        .timeout_count(
+            timeout_count
+        ),
+
+        .overrun_count(
+            overrun_count
+        ),
+
+        .busy(
+            busy
+        )
+    );
+
+
+    // ------------------------------------------------------------------------
+    // Channel model
+    // ------------------------------------------------------------------------
+    //
+    // Every sample receives a no-click response after response_delay clocks.
+    // This is enough to test sequencing/pacing because no-click still generates
+    // a complete physical attempt event.
+    // ------------------------------------------------------------------------
+
+    always @(posedge clk or negedge rst_n) begin
+
+        if (!rst_n) begin
+
+            ch_click <=
+                1'b0;
+
+            ch_no_click <=
+                1'b0;
+
+            ch_err <=
+                1'b0;
+
+            response_pending <=
+                1'b0;
+
+            response_count <=
+                0;
+
+        end
+
+        else begin
+
+            ch_click <=
+                1'b0;
+
+            ch_no_click <=
+                1'b0;
+
+            ch_err <=
+                1'b0;
+
+
+            if (
+                sample_en &&
+                respond_enable
+            ) begin
+
+                response_pending <=
+                    1'b1;
+
+                response_count <=
+                    response_delay;
+
+            end
+
+
+            if (response_pending) begin
+
+                if (
+                    response_count <=
+                    0
+                ) begin
+
+                    ch_no_click <=
+                        1'b1;
+
+                    response_pending <=
+                        1'b0;
+
+                end
+
+                else begin
+
+                    response_count <=
+                        response_count -
+                        1;
+
+                end
+            end
+        end
+    end
+
+
+    // ------------------------------------------------------------------------
+    // Observer
+    // ------------------------------------------------------------------------
+
+    integer cycle_count;
+
+    integer sample_count;
+
+    integer event_count;
+
+    integer last_sample_cycle;
+
+    integer min_spacing;
+
+    integer max_spacing;
+
+    integer spacing_errors;
+
+    integer fails;
+
+
+    reg observe_spacing;
+
+    reg seen_z;
+    reg seen_x;
+
+    reg seen_match;
+    reg seen_mismatch;
+
+
+    always @(posedge clk or negedge rst_n) begin
+
+        if (!rst_n) begin
+
+            cycle_count <=
+                0;
+
+            sample_count <=
+                0;
+
+            event_count <=
+                0;
+
+            last_sample_cycle <=
+                -1;
+
+            min_spacing <=
+                999999;
+
+            max_spacing <=
+                0;
+
+            spacing_errors <=
+                0;
+
+            seen_z <=
+                1'b0;
+
+            seen_x <=
+                1'b0;
+
+            seen_match <=
+                1'b0;
+
+            seen_mismatch <=
+                1'b0;
+
+        end
+
+        else begin
+
+            cycle_count <=
+                cycle_count +
+                1;
+
+
+            if (sample_en) begin
+
+                sample_count <=
+                    sample_count +
+                    1;
+
+
+                if (
+                    last_sample_cycle >=
+                    0
+                ) begin
+
+                    if (
+                        cycle_count -
+                        last_sample_cycle
+                        <
+                        min_spacing
+                    ) begin
+
+                        min_spacing <=
+                            cycle_count -
+                            last_sample_cycle;
+
+                    end
+
+
+                    if (
+                        cycle_count -
+                        last_sample_cycle
+                        >
+                        max_spacing
+                    ) begin
+
+                        max_spacing <=
+                            cycle_count -
+                            last_sample_cycle;
+
+                    end
+
+
+                    if (
+                        observe_spacing &&
+                        (
+                            cycle_count -
+                            last_sample_cycle
+                            !=
+                            5
+                        )
+                    ) begin
+
+                        spacing_errors <=
+                            spacing_errors +
+                            1;
+
+                    end
+                end
+
+
+                last_sample_cycle <=
+                    cycle_count;
+
+            end
+
+
+            if (
+                evt_done ||
+                evt_lost
+            ) begin
+
+                event_count <=
+                    event_count +
+                    1;
+
+
+                if (evt_basis_is_z)
+                    seen_z <=
+                        1'b1;
+
+                else
+                    seen_x <=
+                        1'b1;
+
+
+                if (evt_basis_match)
+                    seen_match <=
+                        1'b1;
+
+                else
+                    seen_mismatch <=
+                        1'b1;
+
+            end
+        end
+    end
+
+
+    // ------------------------------------------------------------------------
+    // Helper: reset observer counters without resetting DUT
+    // ------------------------------------------------------------------------
+
+    task reset_observer;
+
+        begin
+
+            @(negedge clk);
+
+            sample_count =
+                0;
+
+            event_count =
+                0;
+
+            last_sample_cycle =
+                -1;
+
+            min_spacing =
+                999999;
+
+            max_spacing =
+                0;
+
+            spacing_errors =
+                0;
+
+            seen_z =
+                1'b0;
+
+            seen_x =
+                1'b0;
+
+            seen_match =
+                1'b0;
+
+            seen_mismatch =
+                1'b0;
+
+        end
+
+    endtask
+
+
+    // ------------------------------------------------------------------------
+    // Helper: campaign clear
+    // ------------------------------------------------------------------------
+
+    task campaign_clear;
+
+        begin
+
+            @(negedge clk);
+
+            clear =
+                1'b1;
+
+            repeat (2)
+                @(negedge clk);
+
+            clear =
+                1'b0;
+
+            repeat (2)
+                @(negedge clk);
+
+        end
+
+    endtask
+
+
+    // ------------------------------------------------------------------------
+    // Main regression
+    // ------------------------------------------------------------------------
+
+    initial begin
+
+        rst_n =
+            1'b0;
+
+        run =
+            1'b0;
+
+        clear =
+            1'b0;
+
+        rate_hz =
+            32'd10;
+
+
+        respond_enable =
+            1'b1;
+
+        response_delay =
+            0;
+
+
+        observe_spacing =
+            1'b0;
+
+        fails =
+            0;
+
+
+        repeat (5)
+            @(negedge clk);
+
+        rst_n =
+            1'b1;
+
+        repeat (5)
+            @(negedge clk);
+
+
+        // ================================================================
+        // TEST A
+        // Paced stream: 50/10 => exactly one attempt every 5 clocks
+        // ================================================================
+
+        $display("");
+        $display("TEST A: paced 10/50 rate");
+
+        campaign_clear;
+        reset_observer;
+
+
+        rate_hz =
+            32'd10;
+
+        respond_enable =
+            1'b1;
+
+        response_delay =
+            0;
+
+        observe_spacing =
+            1'b1;
+
+        run =
+            1'b1;
+
+
+        repeat (260)
+            @(posedge clk);
+
+
+        run =
+            1'b0;
+
+        repeat (10)
+            @(posedge clk);
+
+
+        $display(
+            "samples=%0d events=%0d min_spacing=%0d max_spacing=%0d overrun=%0d timeout=%0d",
+            sample_count,
+            event_count,
+            min_spacing,
+            max_spacing,
+            overrun_count,
+            timeout_count
+        );
+
+
+        if (
+            sample_count <
+            45
+        ) begin
+
+            $display(
+                "FAIL A: too few samples; expected approximately 50"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        if (
+            spacing_errors !=
+            0
+        ) begin
+
+            $display(
+                "FAIL A: sample spacing was not exactly 5 clocks"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        if (
+            overrun_count !=
+            32'd0
+        ) begin
+
+            $display(
+                "FAIL A: overrun_count=%0d",
+                overrun_count
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        if (
+            timeout_count !=
+            32'd0
+        ) begin
+
+            $display(
+                "FAIL A: timeout_count=%0d",
+                timeout_count
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        if (
+            !seen_z ||
+            !seen_x
+        ) begin
+
+            $display(
+                "FAIL A: basis scheduler did not produce both Z and X"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        if (
+            !seen_match ||
+            !seen_mismatch
+        ) begin
+
+            $display(
+                "FAIL A: basis scheduler did not produce both match and mismatch"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        // ================================================================
+        // TEST B
+        // Free run: fastest legal stream, still 5 clocks apart
+        // ================================================================
+
+        $display("");
+        $display("TEST B: free run");
+
+        campaign_clear;
+        reset_observer;
+
+
+        rate_hz =
+            32'd0;
+
+        respond_enable =
+            1'b1;
+
+        response_delay =
+            0;
+
+        observe_spacing =
+            1'b1;
+
+        run =
+            1'b1;
+
+
+        repeat (180)
+            @(posedge clk);
+
+
+        run =
+            1'b0;
+
+        repeat (10)
+            @(posedge clk);
+
+
+        $display(
+            "samples=%0d min_spacing=%0d max_spacing=%0d overrun=%0d",
+            sample_count,
+            min_spacing,
+            max_spacing,
+            overrun_count
+        );
+
+
+        if (
+            spacing_errors !=
+            0
+        ) begin
+
+            $display(
+                "FAIL B: free-run spacing was not exactly 5 clocks"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        if (
+            overrun_count !=
+            32'd0
+        ) begin
+
+            $display(
+                "FAIL B: free run must not create pacing overruns"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        // ================================================================
+        // TEST C
+        // Slow channel -> pacing deadlines must be reported as overruns
+        // ================================================================
+
+        $display("");
+        $display("TEST C: deliberate overrun");
+
+        campaign_clear;
+        reset_observer;
+
+
+        rate_hz =
+            32'd10;
+
+        respond_enable =
+            1'b1;
+
+        response_delay =
+            8;
+
+        observe_spacing =
+            1'b0;
+
+        run =
+            1'b1;
+
+
+        repeat (250)
+            @(posedge clk);
+
+
+        run =
+            1'b0;
+
+        repeat (10)
+            @(posedge clk);
+
+
+        $display(
+            "overrun=%0d timeout=%0d",
+            overrun_count,
+            timeout_count
+        );
+
+
+        if (
+            overrun_count ==
+            32'd0
+        ) begin
+
+            $display(
+                "FAIL C: slow channel did not raise overrun_count"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        if (
+            timeout_count !=
+            32'd0
+        ) begin
+
+            $display(
+                "FAIL C: slow response unexpectedly timed out"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        // ================================================================
+        // TEST D
+        // No response -> timeout counter must rise
+        // ================================================================
+
+        $display("");
+        $display("TEST D: deliberate timeout");
+
+        campaign_clear;
+        reset_observer;
+
+
+        rate_hz =
+            32'd10;
+
+        respond_enable =
+            1'b0;
+
+        observe_spacing =
+            1'b0;
+
+        run =
+            1'b1;
+
+
+        repeat (120)
+            @(posedge clk);
+
+
+        run =
+            1'b0;
+
+        repeat (10)
+            @(posedge clk);
+
+
+        $display(
+            "timeout=%0d overrun=%0d",
+            timeout_count,
+            overrun_count
+        );
+
+
+        if (
+            timeout_count ==
+            32'd0
+        ) begin
+
+            $display(
+                "FAIL D: missing channel response did not raise timeout_count"
+            );
+
+            fails =
+                fails +
+                1;
+
+        end
+
+
+        // ================================================================
+        // FINAL
+        // ================================================================
+
+        $display("");
+
+        if (
+            fails ==
+            0
+        ) begin
+
+            $display(
+                "=== ALL CHECKS PASSED ==="
+            );
+
+        end
+
+        else begin
+
+            $display(
+                "=== %0d FAILURE(S) ===",
+                fails
+            );
+
+        end
+
+
+        $finish;
+
+    end
+
+endmodule
