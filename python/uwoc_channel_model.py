@@ -655,9 +655,9 @@ def _hr(t=""):
 
 def verify_sigma_s_fit():
     """Cross-check the σ_s² fit against Table IV of [2]."""
-    _hr("KIỂM CHỨNG 1 — fit σ_s²(d) so với Table IV (Salcedo-Serrano ICC'22)")
-    print(f"{'Nước':<13}{'d [m]':>7}{'σ_s² (paper)':>15}{'σ_s² (fit)':>13}"
-          f"{'sai số':>10}")
+    _hr("VERIFICATION 1 — σ_s²(d) fit against Table IV (Salcedo-Serrano ICC'22)")
+    print(f"{'Water':<13}{'d [m]':>7}{'σ_s² (paper)':>15}{'σ_s² (fit)':>13}"
+          f"{'error':>10}")
     print("-" * 78)
     worst = 0.0
     for wt, pts in TABLE_IV.items():
@@ -669,18 +669,18 @@ def verify_sigma_s_fit():
             print(f"{wt:<13}{d:>7.0f}{ref:>15.3f}{got:>13.3f}{e:>9.1f}%")
         print(f"{'':13}→ σ_s²(d) = exp({B:.4f}·(d − {d1:.2f}))")
     B, d1 = SIGMA_S_FIT["harbor"]
-    print(f"{'harbor':<13}  (NGOẠI SUY, không có số liệu đo)"
+    print(f"{'harbor':<13}  (EXTRAPOLATION, no measured data)"
           f"   σ_s²(d) = exp({B:.4f}·(d − {d1:.2f}))")
-    print(f"\n  Sai số lớn nhất: {worst:.2f}%  "
-          f"→ {'ĐẠT' if worst < 5 else 'CẦN XEM LẠI'} (ngưỡng 5%)")
+    print(f"\n  Maximum error: {worst:.2f}%  "
+          f"→ {'PASS' if worst < 5 else 'REVIEW NEEDED'} (5% threshold)")
     return worst < 5.0
 
 
 def verify_weibull_inversion():
     """Check the σ² → (β₁, β₂) inversion and the E[h] = 1 normalisation."""
-    _hr("KIỂM CHỨNG 2 — nghịch đảo tham số Weibull / Lognormal")
-    print(f"{'σ² mục tiêu':>13}{'β₁':>10}{'β₂':>10}"
-          f"{'E[h] MC':>11}{'σ² MC':>11}{'sai số σ²':>12}")
+    _hr("VERIFICATION 2 — Weibull / Lognormal parameter inversion")
+    print(f"{'target σ²':>13}{'β₁':>10}{'β₂':>10}"
+          f"{'E[h] MC':>11}{'σ² MC':>11}{'σ² error':>12}")
     print("-" * 78)
     rng = np.random.default_rng(7)
     ok = True
@@ -696,13 +696,13 @@ def verify_weibull_inversion():
             _, sX2 = lognormal_params(s2)
             tag = f"{'LN':>10}{math.sqrt(sX2):>10.3f}"
         print(f"{s2:>13.2f}{tag}{m:>11.4f}{v:>11.4f}{e:>11.2f}%")
-    print(f"\n  {'ĐẠT' if ok else 'CẦN XEM LẠI'} — E[h]=1 (±2%) và σ² khớp (±3%)")
+    print(f"\n  {'PASS' if ok else 'REVIEW NEEDED'} — E[h]=1 (±2%) and σ² matches (±3%)")
     return ok
 
 
 def verify_sigma_ho():
     """Print σ²_ho versus range for the 5 turbulence levels — check monotonicity."""
-    _hr("KIỂM CHỨNG 3 — σ²_ho(d) từ phổ Nikishov (sóng phẳng, λ = 450 nm)")
+    _hr("VERIFICATION 3 — σ²_ho(d) from the Nikishov spectrum (plane wave, λ = 450 nm)")
     dists = [5, 10, 20, 30, 50, 70]
     print(f"{'Level':<11}{'ε [m²/s³]':>12}{'χ_T [K²/s]':>13}{'w':>5}"
           + "".join(f"{d:>9}m" for d in dists))
@@ -719,16 +719,16 @@ def verify_sigma_ho():
         prev = vals
         # monotonically increasing with d within one level
         mono &= all(vals[i] <= vals[i + 1] * 1.001 for i in range(len(vals) - 1))
-    print(f"\n  Đơn điệu tăng theo d và theo level: "
-          f"{'ĐẠT' if mono else 'CẦN XEM LẠI'}")
-    print("  Đối chiếu định tính [3]: nhiễu loạn MẠNH (σ² > 1) xuất hiện ở cự ly")
-    print("  chỉ 10–100 m — khác hẳn khí quyển (hàng km). Kết quả trên phù hợp.")
+    print(f"\n  Monotonically increasing with d and with level: "
+          f"{'PASS' if mono else 'REVIEW NEEDED'}")
+    print("  Qualitative comparison with [3]: STRONG turbulence (σ² > 1) occurs at")
+    print("  distances of only 10–100 m — unlike the atmosphere (kilometers). The results above agree.")
     return mono
 
 
 def verify_qber_vs_distance(cfg: LinkConfig):
     """Reproduce the shape of the QBER-vs-distance curve of [1] Fig. 19."""
-    _hr("KIỂM CHỨNG 4 — QBER & SKR theo cự ly (tái tạo dạng Fig. 19 của [1])")
+    _hr("VERIFICATION 4 — QBER & SKR versus distance (reproducing the shape of Fig. 19 in [1])")
     for water in ("clear_ocean", "coastal", "harbor"):
         wt = WATER_TYPES[water]
         print(f"\n  ▸ {wt.name}  (a={wt.a}, b={wt.b}, c={wt.c:.3f} m⁻¹)  "
@@ -744,8 +744,8 @@ def verify_qber_vs_distance(cfg: LinkConfig):
                   f"{m['sigma2_s']:>9.3f}{m['e_det']*100:>8.2f}%"
                   f"{m['nbar']:>11.2e}{m['p_click']:>10.2e}"
                   f"{m['qber']*100:>8.2f}%{m['skr']:>12.1f}{flag}")
-    print("\n  Nhận xét kỳ vọng: QBER tăng gần TUYẾN TÍNH ở cự ly ngắn (vì")
-    print("  1−e^(−bd) ≈ bd), rồi tăng vọt khi P_click chạm sàn dark count.")
+    print("\n  Expected observation: QBER increases almost LINEARLY at short distances (because")
+    print("  1−e^(−bd) ≈ bd), then rises sharply when P_click reaches the dark-count floor.")
 
 
 def max_secure_distance(water: str, turb_level: int, cfg: LinkConfig,
@@ -783,11 +783,11 @@ def max_secure_distance(water: str, turb_level: int, cfg: LinkConfig,
 
 def verify_wavelength_choice(cfg: LinkConfig):
     """Check the conclusion: the optimal λ depends on the water type."""
-    _hr("KIỂM CHỨNG 5 — bước sóng tối ưu theo loại nước (knob thích nghi λ)")
-    print("  So sánh tại cự ly bảo mật tối đa (d_max ứng với λ=532 nm),")
-    print("  chỉ tiêu = SKR [bps]; ô có QBER ≥ 11% ghi 'insec'.\n")
-    print(f"  {'Nước':<17}{'d [m]':>7}"
-          + "".join(f"{L:>15}nm" for L in LAMBDA_OPTIONS) + f"{'λ tốt nhất':>14}")
+    _hr("VERIFICATION 5 — optimal wavelength by water type (adaptive λ knob)")
+    print("  Comparison at the maximum secure distance (d_max for λ=532 nm),")
+    print("  metric = SKR [bps]; cells with QBER ≥ 11% are marked 'insec'.\n")
+    print(f"  {'Water':<17}{'d [m]':>7}"
+          + "".join(f"{L:>15}nm" for L in LAMBDA_OPTIONS) + f"{'best λ':>14}")
     print("  " + "-" * 79)
     verdicts = {}
     for water in ("clear_ocean", "coastal", "harbor"):
@@ -804,9 +804,9 @@ def verify_wavelength_choice(cfg: LinkConfig):
         print(f"  {WATER_TYPES[water].name:<17}{d:>7.1f}" + "".join(cells)
               + f"{best:>12} nm")
     ok = (verdicts["clear_ocean"] <= verdicts["coastal"] <= verdicts["harbor"])
-    print("\n  Kỳ vọng theo [1] §I: clear ocean ưu blue-green; nước đục dịch dần")
-    print("  về phía red-yellow.  λ*(clear) ≤ λ*(coastal) ≤ λ*(harbor): "
-          f"{'ĐẠT' if ok else 'CẦN XEM LẠI'}")
+    print("\n  Expected according to [1] §I: clear ocean favors blue-green; turbid water shifts gradually")
+    print("  toward red-yellow.  λ*(clear) ≤ λ*(coastal) ≤ λ*(harbor): "
+          f"{'PASS' if ok else 'REVIEW NEEDED'}")
     return ok
 
 
@@ -822,12 +822,12 @@ def verify_monte_carlo(cfg: LinkConfig):
       (b) Bernoulli SAMPLING ERROR: run at an operating point with a large enough
           P_click (short range) to gather enough clicks to test for bias.
     """
-    _hr("KIỂM CHỨNG 6 — Monte-Carlo vs giải tích")
+    _hr("VERIFICATION 6 — Monte Carlo versus analytical results")
     rng = np.random.default_rng(11)
 
-    print("  (a) Sai số tuyến tính hoá P_click ≈ μ·h_ℓ·h_f·η  (giả thiết của RTL)")
-    print(f"      {'Nước':<13}{'d':>6}{'lv':>4}{'n̄(E[h_f])':>12}"
-          f"{'P_click tâm':>14}{'E[P_click]':>13}{'khe hở':>10}")
+    print("  (a) Linearisation error for P_click ≈ μ·h_ℓ·h_f·η  (RTL assumption)")
+    print(f"      {'Water':<13}{'d':>6}{'lv':>4}{'n̄(E[h_f])':>12}"
+          f"{'P_click center':>14}{'E[P_click]':>13}{'gap':>10}")
     print("      " + "-" * 72)
     ok_lin = True
     for water, d in (("clear_ocean", 20.0), ("coastal", 8.0), ("harbor", 1.5)):
@@ -843,9 +843,9 @@ def verify_monte_carlo(cfg: LinkConfig):
             print(f"      {water:<13}{d:>6.1f}{lv:>4}{ch.nbar_mean:>12.2e}"
                   f"{centre:>14.4e}{exact:>13.4e}{gap:>9.2f}%")
 
-    print("\n  (b) Tính không chệch của tầng quyết định Bernoulli (RTL-style)")
-    print(f"      {'Nước':<13}{'d':>6}{'lv':>4}{'P_click lt':>13}{'P_click MC':>13}"
-          f"{'QBER lt':>10}{'QBER MC':>10}{'#sift':>8}")
+    print("\n  (b) Unbiasedness of the Bernoulli decision stage (RTL-style)")
+    print(f"      {'Water':<13}{'d':>6}{'lv':>4}{'P_click calc':>13}{'P_click MC':>13}"
+          f"{'QBER calc':>10}{'QBER MC':>10}{'#sift':>8}")
     print("      " + "-" * 72)
     ok_mc = True
     for water, d in (("clear_ocean", 8.0), ("coastal", 3.0), ("harbor", 0.5)):
@@ -860,10 +860,10 @@ def verify_monte_carlo(cfg: LinkConfig):
                   f"{mc['p_click']:>13.4e}{an['qber']*100:>9.2f}%"
                   f"{mc['qber']*100:>9.2f}%{n_sift:>8d}")
 
-    print(f"\n  (a) khe hở Jensen < 5%: {'ĐẠT' if ok_lin else 'CẦN XEM LẠI'}"
-          f"   → RTL được phép tuyến tính hoá")
-    print(f"  (b) P_click MC khớp lý thuyết < 10%: "
-          f"{'ĐẠT' if ok_mc else 'CẦN XEM LẠI'}")
+    print(f"\n  (a) Jensen gap < 5%: {'PASS' if ok_lin else 'REVIEW NEEDED'}"
+          f"   → RTL linearisation is permissible")
+    print(f"  (b) P_click MC agrees with theory within 10%: "
+          f"{'PASS' if ok_mc else 'REVIEW NEEDED'}")
     return ok_lin and ok_mc
 
 
@@ -880,13 +880,13 @@ def verify_window_design(cfg: LinkConfig, water="clear_ocean", d=15.0):
     count in that block is large enough (≳ 100).  With the 256 attempts of the
     current atmospheric RTL this FAILS → channel_monitor.v must be changed.
     """
-    _hr("KIỂM CHỨNG 7 — thiết kế cửa sổ ước lượng QBER (kẹp giữa 2 phía)")
+    _hr("VERIFICATION 7 — QBER estimation window design (constrained from both sides)")
     print(f"  {WATER_TYPES[water].name}, d = {d} m, f_rep = {cfg.f_rep:.0e} Hz, "
           f"τ_coh = {cfg.tau_coh_ms} ms")
-    print(f"  → 1 khối kết hợp = {cfg.coherence_pulses:,} xung\n")
+    print(f"  → 1 coherence block = {cfg.coherence_pulses:,} pulses\n")
 
-    print(f"  {'cửa sổ':>10}{'clicks/cs':>12}{'QBER mean':>12}"
-          f"{'std(L1)':>10}{'std(L5)':>10}{'Δstd':>9}   nhận xét")
+    print(f"  {'window':>10}{'clicks/win':>12}{'QBER mean':>12}"
+          f"{'std(L1)':>10}{'std(L5)':>10}{'Δstd':>9}   observation")
     print("  " + "-" * 76)
     MIN_CLICKS = 50          # below this, the QBER estimation error exceeds ~7% absolute
     windows = [256, 1024, 4096, 16384, cfg.coherence_pulses, 500_000]
@@ -899,35 +899,35 @@ def verify_window_design(cfg: LinkConfig, water="clear_ocean", d=15.0):
                   and w <= 2 * cfg.coherence_pulses)
         if usable:
             best_w = w                      # keep the LARGEST usable window
-        note = ("shot-noise chi phối" if s1["clicks_per_window"] < MIN_CLICKS
-                else "fading bị trung bình hoá" if w > 2 * cfg.coherence_pulses
-                else "VÙNG DÙNG ĐƯỢC")
-        tag = " ← khối kết hợp" if w == cfg.coherence_pulses else ""
+        note = ("shot noise dominates" if s1["clicks_per_window"] < MIN_CLICKS
+                else "fading is averaged out" if w > 2 * cfg.coherence_pulses
+                else "USABLE REGION")
+        tag = " ← coherence block" if w == cfg.coherence_pulses else ""
         print(f"  {w:>10,}{s1['clicks_per_window']:>12.1f}"
               f"{s1['qber_mean']*100:>11.2f}%{s1['qber_std']*100:>9.2f}%"
               f"{s5['qber_std']*100:>9.2f}%{gap*100:>8.2f}%   {note}{tag}")
 
     ok = best_w is not None
     if ok:
-        print(f"\n  Cửa sổ khuyến nghị: {best_w:,} attempt "
+        print(f"\n  Recommended window: {best_w:,} attempts "
               f"(≈ {best_w / cfg.f_rep * 1e3:.2f} ms, "
-              f"{best_w / cfg.coherence_pulses:.2f}× khối kết hợp)")
-        print(f"  RTL hiện tại (channel_monitor.v) dùng 256 attempt "
-              f"→ nhỏ hơn {best_w // 256}× ⇒ PHẢI SỬA (bước 3).")
+              f"{best_w / cfg.coherence_pulses:.2f}× a coherence block)")
+        print(f"  Current RTL (channel_monitor.v) uses 256 attempts "
+              f"→ {best_w // 256}× smaller ⇒ MUST BE MODIFIED (step 3).")
     else:
-        print("\n  KHÔNG có cửa sổ dùng được ở điểm làm việc này:")
-        print("  cần tăng f_rep, tăng μ, hoặc rút ngắn cự ly.")
-    print(f"  {'ĐẠT' if ok else 'CẦN XEM LẠI'} — tồn tại vùng cửa sổ dùng được")
+        print("\n  NO usable window exists at this operating point:")
+        print("  increase f_rep, increase μ, or shorten the distance.")
+    print(f"  {'PASS' if ok else 'REVIEW NEEDED'} — a usable window region exists")
     return ok
 
 
 def verify_window_statistics(cfg: LinkConfig, water="clear_ocean", d=15.0):
     """Turbulence shows up in the window-to-window variability, not in the mean QBER."""
-    _hr("KIỂM CHỨNG 8 — nhiễu loạn lộ ra ở ĐÂU? (mean vs biến động cửa sổ)")
+    _hr("VERIFICATION 8 — WHERE does turbulence appear? (mean versus window variability)")
     w = cfg.coherence_pulses
-    print(f"  {WATER_TYPES[water].name}, d = {d} m, cửa sổ = 1 khối kết hợp "
-          f"({w:,} xung)\n")
-    print(f"  {'Level':<11}{'σ²_ho':>9}{'clicks/cs':>11}{'QBER mean':>12}"
+    print(f"  {WATER_TYPES[water].name}, d = {d} m, window = 1 coherence block "
+          f"({w:,} pulses)\n")
+    print(f"  {'Level':<11}{'σ²_ho':>9}{'clicks/win':>11}{'QBER mean':>12}"
           f"{'QBER std':>11}{'QBER p90':>11}{'outage':>9}{'SKR/pulse':>12}")
     print("  " + "-" * 78)
     means, stds = [], []
@@ -942,35 +942,35 @@ def verify_window_statistics(cfg: LinkConfig, water="clear_ocean", d=15.0):
     spread_mean = (max(means) - min(means)) / max(np.mean(means), 1e-9)
     spread_std = (max(stds) - min(stds)) / max(np.mean(stds), 1e-9)
     ok = spread_std > 2 * spread_mean
-    print(f"\n  Biến thiên tương đối theo level:  QBER mean = {spread_mean*100:.1f}%"
+    print(f"\n  Relative variation across levels:  QBER mean = {spread_mean*100:.1f}%"
           f"   |   QBER std = {spread_std*100:.1f}%")
-    print(f"  std nhạy hơn mean ≥2×: {'ĐẠT' if ok else 'CẦN XEM LẠI'}")
-    print("\n  ⇒ KẾT LUẬN THIẾT KẾ (dùng cho bước 3):")
-    print("    channel_monitor.v phải xuất thêm ĐỘ BIẾN ĐỘNG giữa các cửa sổ")
-    print("    (qber_var) và LOSS RATE, chứ không chỉ QBER trung bình — nếu")
-    print("    không, adaptive_controller sẽ 'mù' trước nhiễu loạn dưới nước.")
+    print(f"  std is ≥2× more sensitive than mean: {'PASS' if ok else 'REVIEW NEEDED'}")
+    print("\n  ⇒ DESIGN CONCLUSION (for step 3):")
+    print("    channel_monitor.v must also output VARIABILITY between windows")
+    print("    (qber_var) and LOSS RATE, in addition to mean QBER — otherwise")
+    print("    adaptive_controller will be 'blind' to underwater turbulence.")
     return ok
 
 
 def report_secure_range(cfg: LinkConfig):
     """Table of maximum secure range — used directly in the paper."""
-    _hr("BẢNG A — cự ly bảo mật tối đa d_max [m]")
-    print("  Hai tiêu chí:")
-    print("    (i)  mean   : QBER trung bình dài hạn < 11%")
-    print(f"    (ii) outage : P(QBER cửa sổ {cfg.coherence_pulses:,}-xung > 11%)"
-          f" < 10%  ← thực tế hơn\n")
+    _hr("TABLE A — maximum secure distance d_max [m]")
+    print("  Two criteria:")
+    print("    (i)  mean   : long-term mean QBER < 11%")
+    print(f"    (ii) outage : P({cfg.coherence_pulses:,}-pulse window QBER > 11%)"
+          f" < 10%  ← more realistic\n")
     for crit in ("mean", "outage"):
-        print(f"  ── tiêu chí '{crit}' " + "─" * 46)
-        print(f"  {'Nước':<17}" + "".join(f"{'L' + str(l):>10}" for l in range(1, 6)))
+        print(f"  ── criterion '{crit}' " + "─" * 46)
+        print(f"  {'Water':<17}" + "".join(f"{'L' + str(l):>10}" for l in range(1, 6)))
         for water in ("clear_ocean", "coastal", "harbor"):
             row = [max_secure_distance(water, lv, cfg, criterion=crit)
                    for lv in range(1, 6)]
             print(f"  {WATER_TYPES[water].name:<17}"
                   + "".join(f"{v:>10.2f}" for v in row))
         print()
-    print("  Cột 'outage' GIẢM dần theo level — đây mới là 'secure operating")
-    print("  range' đúng nghĩa, và là chỉ tiêu để so sánh Fixed vs Adaptive")
-    print("  (tương ứng dòng cuối bảng Key Results trong README).")
+    print("  The 'outage' column DECREASES as the level increases — this is the true")
+    print("  'secure operating range' and the metric for comparing Fixed vs Adaptive")
+    print("  (corresponding to the last row of the Key Results table in the README).")
 
 
 def make_plots(cfg: LinkConfig, outdir: str):
@@ -1006,7 +1006,7 @@ def make_plots(cfg: LinkConfig, outdir: str):
     fig.savefig(p, dpi=160); plt.close(fig)
     print(f"  ✔ {p}")
 
-    # --- Fig B: σ²_ho vs distance cho 5 level ---
+    # --- Fig B: σ²_ho vs distance for 5 levels ---
     fig, ax = plt.subplots(figsize=(7.5, 5))
     ds = np.linspace(2, 80, 40)
     for lv in range(1, 6):
@@ -1026,7 +1026,7 @@ def make_plots(cfg: LinkConfig, outdir: str):
 
 def main():
     ap = argparse.ArgumentParser(description="UWOC channel model — self-test")
-    ap.add_argument("--plot", action="store_true", help="Xuất hình kiểm chứng")
+    ap.add_argument("--plot", action="store_true", help="Generate verification plots")
     ap.add_argument("--outdir", default="python/Images")
     ap.add_argument("--lam", type=int, default=450, choices=LAMBDA_OPTIONS)
     ap.add_argument("--mu", type=float, default=0.1)
@@ -1048,12 +1048,12 @@ def main():
     r.append(verify_window_statistics(cfg))
     report_secure_range(cfg)
 
-    _hr("TỔNG KẾT")
-    print(f"  {sum(r)}/{len(r)} kiểm chứng định lượng ĐẠT")
-    print("  Bước tiếp theo:  python python/uwoc_lut_gen.py")
+    _hr("SUMMARY")
+    print(f"  {sum(r)}/{len(r)} quantitative checks PASSED")
+    print("  Next step:  python python/uwoc_lut_gen.py")
 
     if args.plot:
-        _hr("XUẤT HÌNH")
+        _hr("GENERATE PLOTS")
         make_plots(cfg, args.outdir)
 
 
