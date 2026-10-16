@@ -27,7 +27,7 @@ The underlying single-FPGA BB84/UWOC platform and adaptive controller were intro
 > [!IMPORTANT]
 > The optical channel is emulated in RTL. The measurements validate the implemented stochastic channel model, FPGA acquisition path, and analysis pipeline; they are not measurements through a physical water channel.
 
-![Single-FPGA BB84/UWOC architecture and block-acquisition path](Images/QKD_UWOC_Block.png)
+![Single-FPGA BB84/UWOC architecture and block-acquisition path](figures/QKD_UWOC_Block.png)
 
 ## Contents
 
@@ -58,7 +58,7 @@ At the main operating point—clear ocean, 25 m, 450 nm, nominal `mu = 0.1`—th
 | L4 | 3.707% | 1.14 × 10^-3 | [1.03, 1.25] × 10^-3 | 1.05 × 10^-5 |
 | L5 | 3.706% | 3.33 × 10^-3 | [3.04, 3.65] × 10^-3 | 3.72 × 10^-5 |
 
-![Pooled QBER and normalized coarse-graining defect](Images/fig_uwoc_q2_defect_campaign.png)
+![Pooled QBER and normalized coarse-graining defect](figures/fig_uwoc_q2_defect_campaign.png)
 
 The measurements support four main conclusions:
 
@@ -114,7 +114,7 @@ All population points lie on one ray through the origin. Since `V` is positively
 
 With nonzero background counts, deep fades suppress the signal while the background floor remains fixed. Low-gain blocks bend toward a QBER of one half, making the block label informative about the error bit. At L5, the deepest bin reaches 27.0% QBER while contributing only 0.28% of all sifted detections, so it is prominent in block-resolved statistics but nearly invisible in pooled QBER.
 
-![Gain/error-gain trajectory with and without background](Images/fig_uwoc_q2_control_gt.png)
+![Gain/error-gain trajectory with and without background](figures/fig_uwoc_q2_control_gt.png)
 
 ## Experimental design
 
@@ -168,7 +168,7 @@ Delta_cg approximately (kappa/2) Var[T_j - e_star G_j].
 
 The quadratic-to-exact ratio is 0.99, 0.95, and 0.93 at L1–L3, then falls to 0.49 and 0.41 at L4–L5. The local approximation therefore tracks weak fluctuations but underestimates the contribution of the strong deep-fade tail.
 
-![Exact defect and local quadratic approximation](Images/fig_uwoc_q2_exact_vs_bkm.png)
+![Exact defect and local quadratic approximation](figures/fig_uwoc_q2_exact_vs_bkm.png)
 
 ## Decoy-state experiment
 
@@ -198,7 +198,7 @@ The finite-statistics curves replace gains and error gains by conservative one-s
 > [!CAUTION]
 > This is a statistical-fluctuation analysis of an asymptotic decoy-state bound. It is **not** a composable finite-key security proof.
 
-![Block-resolved decoy-state rate relative to pooling](Images/fig_uwoc_q2_decoy.png)
+![Block-resolved decoy-state rate relative to pooling](figures/fig_uwoc_q2_decoy.png)
 
 ## FPGA implementation
 
@@ -247,7 +247,7 @@ The build reports are in `verilog/output_files/top_module.fit.summary` and `veri
 │   ├── README_Q2_security_extension.md
 │   ├── RUNBOOK_Q2_FPGA.md
 │   └── RUNBOOK_Q2B_REVISION.md
-├── Images/
+├── figures/
 │   ├── QKD_UWOC_Block.png
 │   └── fig_uwoc_q2_*.png
 ├── phase2_results/                 analysis tables and diagnostic plots
@@ -351,7 +351,7 @@ python python\decoy_security_analysis.py --csv $decoy --bootstrap 200
 python python\figs_q2_campaign.py
 ```
 
-The main numerical outputs are written to `phase2_results/`; publication figures are written to `Images/`.
+The main numerical outputs are written to `phase2_results/`; publication figures are written to `figures/`.
 
 ### 4. Run the RTL regressions
 
