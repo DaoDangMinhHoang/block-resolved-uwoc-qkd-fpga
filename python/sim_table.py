@@ -1,54 +1,61 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-sim_table.py — Bảng MÔ PHỎNG toàn ma trận + bảng SO SÁNH với số đo FPGA
+sim_table.py — Full-matrix SIMULATION table + COMPARISON table against FPGA measurements
 ═══════════════════════════════════════════════════════════════════════════════
 
-KHÔNG chạm vào cổng COM: script này chỉ đọc data/fpga_points.csv (+ data/clicks_*.csv)
-và tính lại mô hình. An toàn để chạy song song với một phiên fpga_collect.py đang đo.
+DOES NOT access the COM port: this script only reads data/fpga_points.csv
+(+ data/clicks_*.csv) and recomputes the model. It is safe to run in parallel
+with an fpga_collect.py measurement session.
 
-Ba bảng, ba mục đích khác nhau:
+Three tables, each with a different purpose:
 
-  [1] --matrix  BẢNG MÔ PHỎNG (data/sim_table.csv)
-      Toàn bộ ma trận nước × mức nhiễu loạn × cự ly × bước sóng, tính bằng mô hình
-      giải tích + thống kê cửa sổ. Đây là bảng "kết quả lý thuyết" cho bài báo và
-      cũng là bảng cho biết ĐIỂM NÀO ĐÁNG ĐO trên phần cứng: những dòng chỉ khác
-      nhau ở cột std/outage mà giống hệt nhau ở cột P_click/QBER thì đo lại trên
-      FPGA cũng ra đúng một đường cong.
+  [1] --matrix  SIMULATION TABLE (data/sim_table.csv)
+      The complete water × turbulence level × distance × wavelength matrix,
+      calculated using the analytical model + window statistics. This is the
+      "theoretical results" table for the paper, and it also indicates WHICH
+      POINTS ARE WORTH MEASURING in hardware: rows that differ only in their
+      std/outage columns but are identical in their P_click/QBER columns will
+      also produce exactly the same curve when measured again on the FPGA.
 
-  [2] --compare  BẢNG SO SÁNH (data/compare_table.csv + .md)
-      Ghép từng điểm đã đo với dự đoán mô hình: tỉ số P_click, z-score Poisson,
-      khoảng Clopper-Pearson của QBER đo có chứa QBER mô hình hay không, và
-      σ² của trường fading suy ra từ cột irrad trong clicks_*.csv.
+  [2] --compare  COMPARISON TABLE (data/compare_table.csv + .md)
+      Matches every measured point with its model prediction: P_click ratio,
+      Poisson z-score, whether the measured QBER's Clopper-Pearson interval
+      contains the model QBER, and the fading field's σ² inferred from the irrad
+      column in clicks_*.csv.
 
-  [3] --blocks  BẢNG THEO KHỐI KẾT HỢP (data/block_table.csv)
-      Chỉ chạy được với số liệu thu bằng bitstream [v12] và --coh >= 1: khi đó
-      mỗi khối 2^(coh+5) qubit là MỘT mẫu fading đóng băng, nên QBER của từng
-      khối là đại lượng đo được thật. Bảng đối chiếu trung bình / độ lệch chuẩn /
-      outage theo khối với UWOCChannel.window_statistics(window = 2^(coh+5)).
-      ĐÂY là chỗ L1…L5 tách nhau ra; QBER GỘP thì không — xem ghi chú dưới.
+  [3] --blocks  COHERENCE-BLOCK TABLE (data/block_table.csv)
+      Only works with data acquired using the [v12] bitstream and --coh >= 1:
+      each block of 2^(coh+5) qubits is then ONE frozen-fading sample, so each
+      block's QBER is a genuinely measured quantity. The table compares the
+      blockwise mean / standard deviation / outage against
+      UWOCChannel.window_statistics(window = 2^(coh+5)). THIS is where L1…L5
+      separate; POOLED QBER does not — see the note below.
 
-Chạy:
-    python python/sim_table.py                      # cả ba bảng
-    python python/sim_table.py --matrix             # chỉ bảng mô phỏng
-    python python/sim_table.py --compare            # chỉ bảng so sánh
-    python python/sim_table.py --blocks             # chỉ bảng theo khối
+Run:
+    python python/sim_table.py                      # all three tables
+    python python/sim_table.py --matrix             # simulation table only
+    python python/sim_table.py --compare            # comparison table only
+    python python/sim_table.py --blocks             # blockwise table only
     python python/sim_table.py --matrix --lams 450,532,650
 
-VÌ SAO QBER GỘP KHÔNG THẤY NHIỄU LOẠN:
-    fpga_collect ghi ra tổng lỗi / tổng bit sàng, tức trung bình CÓ TRỌNG SỐ theo
-    số click. Khối bị fade sâu đóng góp rất ít click nên bị đánh trọng số nhẹ, và
-    con số cuối cùng gần như không đổi theo mức nhiễu loạn (mô hình ở 25 m:
-    3,71 % ở L1 và 3,70 % ở L5). Trung bình KHÔNG trọng số trên từng khối thì đi
-    từ 3,72 % lên 13,50 % — và chính nó mới là đại lượng quyết định bảo mật, vì
-    BB84 chưng cất khoá theo từng khối chứ không gộp cả phiên.
+WHY POOLED QBER DOES NOT REVEAL TURBULENCE:
+    fpga_collect writes total errors / total sifted bits, i.e. an average
+    WEIGHTED by the number of clicks. Deeply faded blocks contribute very few
+    clicks and therefore receive little weight, so the final number barely
+    changes with turbulence level (the model at 25 m gives 3.71% at L1 and
+    3.70% at L5). The UNWEIGHTED mean across individual blocks instead rises
+    from 3.72% to 13.50% — and that is the security-determining quantity,
+    because BB84 distills keys block by block rather than pooling an entire
+    session.
 
-CHỈ BÁO PHỤ — CV(irrad):
-    h = h_s·h_o với E[h_s] = E[h_o] = 1 và hai biến độc lập, nên
+SECONDARY INDICATOR — CV(irrad):
+    h = h_s·h_o with E[h_s] = E[h_o] = 1 and the two variables independent, so
         Var(h) = (1 + σ²_s)(1 + σ²_ho) − 1
-    Trường irrad báo về theo TỪNG CLICK (top_module.v, thang 128 = 1.0) nên
-    histogram của nó lấy mẫu đúng phân bố biên của h. Đại lượng này dùng được cả
-    với số liệu thu bằng bitstream cũ, khi thống kê theo khối chưa đo được.
+    The irrad field is reported PER CLICK (top_module.v, scale 128 = 1.0), so
+    its histogram correctly samples the marginal distribution of h. This
+    quantity also works with data acquired using an older bitstream, for which
+    blockwise statistics were not yet measurable.
 """
 
 from __future__ import annotations
@@ -180,7 +187,7 @@ def _write_csv(path: str, fields: list[str], rows: list[dict]):
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
-    print("  → %s  (%d dòng)" % (_short(path), len(rows)))
+    print("  → %s  (%d rows)" % (_short(path), len(rows)))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -235,7 +242,7 @@ def cmd_matrix(args, cfg0: LinkConfig):
     fields = list(SIM_FIELDS) + (["mc_p_click", "mc_qber_pct", "mc_n"]
                                  if args.mc else [])
     print("\n" + "═" * 108)
-    print("  BẢNG MÔ PHỎNG — %d cấu hình" % len(rows))
+    print("  SIMULATION TABLE — %d configurations" % len(rows))
     print("═" * 108)
 
     # Print one compact block per (water, λ); turbulence levels side by side so the
@@ -249,7 +256,7 @@ def cmd_matrix(args, cfg0: LinkConfig):
                   % (WATER_TYPES[water].name, lam, cfg0.mu))
             print("  %6s %4s %10s %8s %8s %9s %9s %8s %8s %6s"
                   % ("d[m]", "L", "P_click", "QBER%", "SKR bps", "σ²_ho",
-                     "CV(h)", "σQBER%", "outage", "an toàn"))
+                     "CV(h)", "σQBER%", "outage", "secure"))
             print("  " + "-" * 96)
             for r in sub:
                 print("  %6g L%-3d %10.3e %8.2f %8.3g %9.3f %9.3f %8.2f %8.3f %6s"
@@ -261,13 +268,13 @@ def cmd_matrix(args, cfg0: LinkConfig):
 
     # Headline table for the paper: d_max per (water, turbulence level).
     print("\n" + "═" * 108)
-    print("  CỰ LY BẢO MẬT TỐI ĐA d_max [m] — tiêu chí outage < %.0f%% "
-          "(tiêu chí trung bình trong ngoặc)" % (100 * OUTAGE_LIMIT))
+    print("  MAXIMUM SECURE DISTANCE d_max [m] — outage criterion < %.0f%% "
+          "(mean criterion in parentheses)" % (100 * OUTAGE_LIMIT))
     print("═" * 108)
     for lam in lams:
         cfg = LinkConfig(**{**cfg0.__dict__, "lam_nm": lam})
         print("\n  λ = %d nm" % lam)
-        print("  %-18s" % "Nước" + "".join("%16s" % ("L%d" % l) for l in turbs))
+        print("  %-18s" % "Water" + "".join("%16s" % ("L%d" % l) for l in turbs))
         print("  " + "-" * (18 + 16 * len(turbs)))
         for water in waters:
             cells = []
@@ -280,9 +287,9 @@ def cmd_matrix(args, cfg0: LinkConfig):
                 cells.append("%7.1f (%5.1f)" % (d_out, d_mean))
             print("  %-18s" % WATER_TYPES[water].name
                   + "".join("%16s" % c for c in cells))
-    print("\n  Cột trong ngoặc gần như KHÔNG đổi theo L: QBER trung bình độc lập")
-    print("  với nhiễu loạn (P_click gần tuyến tính theo h nên kỳ vọng triệt tiêu")
-    print("  fading). Chỉ tiêu chí outage mới tách được các mức nhiễu loạn.\n")
+    print("\n  The parenthesized column barely changes with L: mean QBER is")
+    print("  independent of turbulence (P_click is nearly linear in h, so fading")
+    print("  cancels in expectation). Only the outage criterion separates the turbulence levels.\n")
 
     _write_csv(os.path.join(DATA_DIR, args.sim_out), fields, rows)
     return rows
@@ -294,13 +301,13 @@ def cmd_matrix(args, cfg0: LinkConfig):
 def cmd_compare(args, cfg0: LinkConfig):
     path = os.path.join(DATA_DIR, args.points)
     if not os.path.exists(path):
-        print("  ⚠ Chưa có %s — bỏ qua bảng so sánh." % _short(path))
+        print("  ⚠ %s does not exist yet — skipping the comparison table." % _short(path))
         return []
 
     with open(path, newline="", encoding="utf-8") as f:
         meas = list(csv.DictReader(f))
     if not meas:
-        print("  ⚠ %s rỗng." % _short(path))
+        print("  ⚠ %s is empty." % _short(path))
         return []
 
     rows = []
@@ -361,16 +368,16 @@ def cmd_compare(args, cfg0: LinkConfig):
 
     # ---- console -------------------------------------------------------
     print("\n" + "═" * 118)
-    print("  SO SÁNH ĐO (FPGA) ↔ MÔ PHỎNG — %d điểm" % len(rows))
+    print("  MEASUREMENT (FPGA) ↔ SIMULATION COMPARISON — %d points" % len(rows))
     print("═" * 118)
     print("  %-22s %5s %10s %10s %6s %7s %8s %-18s %8s %5s"
-          % ("cấu hình", "d[m]", "P_đo", "P_mô hình", "tỉ số", "z",
-             "QBER đo", "CP 95%", "QBER mh", "khớp"))
+          % ("configuration", "d[m]", "P_meas", "P_model", "ratio", "z",
+             "QBER meas", "CP 95%", "QBER mdl", "match"))
     print("  " + "-" * 114)
     for r in rows:
         tag = r["tag"].replace("fixed_", "").replace("adaptive_", "")
-        verdict = ("khớp" if r["qber_in_CI"] else
-                   ("LỆCH" if r["n_sift"] >= MIN_SIFT else "ít mẫu"))
+        verdict = ("match" if r["qber_in_CI"] else
+                   ("MISMATCH" if r["n_sift"] >= MIN_SIFT else "low N"))
         print("  %-22s %5g %10.3e %10.3e %6.3f %+7.2f %7.2f%% [%5.2f%%,%6.2f%%] "
               "%7.2f%% %5s"
               % (tag, r["distance_m"], r["p_click_meas"], r["p_click_sim"],
@@ -389,29 +396,29 @@ def cmd_compare(args, cfg0: LinkConfig):
     tot_var = sum(r["var_click"] for r in rows)
     z_tot = (tot_c - tot_ce) / math.sqrt(max(tot_var, 1e-9))
     print("  " + "-" * 114)
-    print("  GỘP: click %d / kỳ vọng %.1f = %.3f (z = %+.2f, p = %.3f)"
+    print("  POOLED: clicks %d / expected %.1f = %.3f (z = %+.2f, p = %.3f)"
           % (tot_c, tot_ce, tot_c / max(tot_ce, 1e-9), z_tot,
              2 * float(_norm.sf(abs(z_tot)))))
     if any(r["n_blocks"] and r["n_blocks"] < 100 for r in rows):
-        print("  ⚠ Có điểm trải < 100 khối kết hợp: z ở trên ĐÃ tính thêm phần")
-        print("    tán xạ do fading, đừng so nó với z thuần Poisson của bản cũ.")
+        print("  ⚠ Some points span < 100 coherence blocks: the z-score above ALREADY")
+        print("    includes fading dispersion; do not compare it with the old pure-Poisson z-score.")
     if tot_s:
         lo, hi = cp_interval(tot_e, tot_s)
-        print("  GỘP: QBER %.3f%% [%.3f%%, %.3f%%] vs mô hình %.3f%% → %s"
+        print("  POOLED: QBER %.3f%% [%.3f%%, %.3f%%] vs model %.3f%% → %s"
               % (100 * tot_e / tot_s, 100 * lo, 100 * hi, 100 * tot_ee / tot_s,
-                 "khớp" if lo <= tot_ee / tot_s <= hi else "LỆCH"))
-        print("  %d/%d điểm đủ mẫu có mô hình nằm trong khoảng CP 95%% "
-              "(kỳ vọng ~95%%)" % (n_ok, n_val))
+                 "match" if lo <= tot_ee / tot_s <= hi else "MISMATCH"))
+        print("  %d/%d sufficiently sampled points contain the model within the 95%% CP interval "
+              "(expected ~95%%)" % (n_ok, n_val))
 
     # ---- turbulence signature -----------------------------------------
     have_cv = [r for r in rows if r["cv_h_meas"] == r["cv_h_meas"]]
     if have_cv:
         print("\n" + "═" * 118)
-        print("  CHỈ BÁO NHIỄU LOẠN — σ² của h suy ra từ cột irrad (per-click)")
+        print("  TURBULENCE INDICATOR — σ² of h inferred from the per-click irrad column")
         print("═" * 118)
         print("  %-22s %5s %4s %10s %10s %10s %10s %8s"
-              % ("cấu hình", "d[m]", "L", "CV đo", "CV mô hình",
-                 "σ²_h đo", "σ²_h mh", "bão hoà"))
+              % ("configuration", "d[m]", "L", "CV meas", "CV model",
+                 "σ²_h meas", "σ²_h mdl", "clipped"))
         print("  " + "-" * 94)
         n_sat = 0
         for r in have_cv:
@@ -425,12 +432,12 @@ def cmd_compare(args, cfg0: LinkConfig):
                      r["sigma2_h_meas"], r["sigma2_h_sim"],
                      100 * sat if sat == sat else float("nan"), flag))
         if n_sat:
-            print("\n  ← %d điểm có >1%% số click bị KẸP TRẦN irrad = 255 (h = 2.0)."
+            print("\n  ← %d points have >1%% of clicks CLIPPED at irrad = 255 (h = 2.0)."
                   % n_sat)
-            print("    CV đo ở những dòng đó là CẬN DƯỚI, không phải ước lượng đúng.")
-            print("    Dùng bảng --blocks cho các điểm này: QBER theo khối không bị kẹp.")
-        print("\n  Với số liệu thu bằng bitstream CŨ, đây là đại lượng duy nhất tách")
-        print("  được L1…L5 ở cùng cự ly. Từ [v12] thì bảng --blocks tốt hơn hẳn.")
+            print("    The measured CV in those rows is a LOWER BOUND, not a correct estimate.")
+            print("    Use the --blocks table for these points: blockwise QBER is not clipped.")
+        print("\n  For data acquired using the OLD bitstream, this is the only quantity")
+        print("  that separates L1…L5 at the same distance. From [v12] onward, the --blocks table is far better.")
 
     _write_csv(os.path.join(DATA_DIR, args.cmp_out), CMP_FIELDS, rows)
     _write_markdown(os.path.join(DATA_DIR, os.path.splitext(args.cmp_out)[0]
@@ -523,7 +530,7 @@ def blocks_from_clicks(tag: str, coh_q: int, n_qubit: int, n_click: int):
 def cmd_windows(args, cfg0: LinkConfig):
     path = os.path.join(DATA_DIR, args.points)
     if not os.path.exists(path):
-        print("  ⚠ Chưa có %s — bỏ qua bảng theo khối." % _short(path))
+        print("  ⚠ %s does not exist yet — skipping the blockwise table." % _short(path))
         return []
     with open(path, newline="", encoding="utf-8") as f:
         meas = list(csv.DictReader(f))
@@ -588,17 +595,17 @@ def cmd_windows(args, cfg0: LinkConfig):
         ))
 
     if not rows:
-        print("\n  ⚠ Không điểm nào có cột `attempt` + `coh_qubits` "
-              "(%d điểm bỏ qua)." % skipped)
-        print("    Cần bitstream [v12] và fpga_collect.py chạy với --coh >= 1.")
+        print("\n  ⚠ No point has both the `attempt` and `coh_qubits` columns "
+              "(%d points skipped)." % skipped)
+        print("    The [v12] bitstream and fpga_collect.py running with --coh >= 1 are required.")
         return []
 
     print("\n" + "═" * 118)
-    print("  THỐNG KÊ THEO KHỐI KẾT HỢP — chỗ nhiễu loạn thực sự lộ ra")
+    print("  COHERENCE-BLOCK STATISTICS — where turbulence is actually revealed")
     print("═" * 118)
     print("  %-20s %5s %4s %13s %7s %9s %9s %9s %9s"
-          % ("cấu hình", "d[m]", "L", "số khối", "sift/kh", "QBER gộp",
-             "QBER khối", "std khối", "outage"))
+          % ("configuration", "d[m]", "L", "blocks", "sift/blk", "pooled QBER",
+             "block QBER", "block std", "outage"))
     print("  " + "-" * 112)
     for r in rows:
         nb = ("%d" % r["n_blocks"] if r["seg_mode"] == "attempt"
@@ -612,35 +619,36 @@ def cmd_windows(args, cfg0: LinkConfig):
               % ("", "", "", "", "", r["sim_qber_pooled_pct"],
                  r["sim_qber_win_mean_pct"], r["sim_qber_win_std_pct"],
                  r["sim_outage"], r["sim_sigma2_ho_rom"]))
-        print("  %-20s %5s %4s %13s %7s %8s %8.2f%% %8.2f%% %9.3f   ← mô hình liên tục"
+        print("  %-20s %5s %4s %13s %7s %8s %8.2f%% %8.2f%% %9.3f   ← continuous model"
               % ("", "", "", "", "", "", r["cont_qber_win_mean_pct"],
                  r["cont_qber_win_std_pct"], r["cont_outage"]))
         # The mean and the std both ride on this handful of blocks; its Poisson
         # error is the honest uncertainty of the row.
         nd = r["n_dead"]
-        print("  %-20s khối chết (QBER>35%%): %d ± %.1f  →  đóng góp %.2f%% ± %.2f%% "
-              "vào QBER khối"
+        print("  %-20s dead blocks (QBER>35%%): %d ± %.1f  →  contribute %.2f%% ± %.2f%% "
+              "to block QBER"
               % ("", nd, max(nd, 1) ** 0.5,
                  100 * nd * 0.5 / max(r["n_blocks"], 1),
                  100 * max(nd, 1) ** 0.5 * 0.5 / max(r["n_blocks"], 1)))
         if r["sift_per_block"] < 32:
-            print("  %-20s ⚠ chỉ %.1f bit sàng/khối — QBER theo khối chủ yếu là "
-                  "nhiễu đếm" % ("", r["sift_per_block"]))
+            print("  %-20s ⚠ only %.1f sifted bits/block — blockwise QBER is dominated "
+                  "by counting noise" % ("", r["sift_per_block"]))
 
     n_salv = sum(1 for r in rows if r["seg_mode"] == "irrad")
     if n_salv:
-        print("\n  * %d điểm phải CỨU bằng cách cắt theo đoạn irrad: bitstream lúc"
+        print("\n  * %d points had to be SALVAGED by segmenting runs of constant irrad:"
               % n_salv)
-        print("    thu chưa có qub_index nên trường `attempt` đếm CLICK, không phải")
-        print("    attempt. Mỗi đoạn irrad liên tiếp = một khối. Hai hệ quả:")
-        print("      · khối KHÔNG có click nào thì vô hình ⇒ std và outage là CẬN DƯỚI")
-        print("      · hai khối liền nhau trùng giá trị irrad thì bị gộp làm một")
-        print("    Cột 'số khối' ghi <đo được>/<lý thuyết = n_qubit/coh_qubits>.")
+        print("    the bitstream used for acquisition did not yet have qub_index, so the "
+              "`attempt` field counts CLICKS, not attempts. Each consecutive irrad run")
+        print("    is treated as one block. This has two consequences:")
+        print("      · blocks with NO clicks are invisible ⇒ std and outage are LOWER BOUNDS")
+        print("      · two adjacent blocks with the same irrad value are merged into one")
+        print("    The 'blocks' column reports <measured>/<theoretical = n_qubit/coh_qubits>.")
     if skipped:
-        print("\n  (%d điểm bỏ qua vì log chưa có cột `attempt`.)" % skipped)
-    print("\n  'QBER gộp' là con số fpga_collect ghi ra: tổng lỗi / tổng bit sàng.")
-    print("  'QBER khối' là trung bình KHÔNG trọng số trên từng khối kết hợp —")
-    print("  đại lượng quyết định bảo mật, vì BB84 chưng cất khoá theo từng khối.")
+        print("\n  (%d points skipped because their logs do not yet have the `attempt` column.)" % skipped)
+    print("\n  'Pooled QBER' is the value written by fpga_collect: total errors / total sifted bits.")
+    print("  'Block QBER' is the UNWEIGHTED mean over individual coherence blocks —")
+    print("  the security-determining quantity, because BB84 distills keys block by block.")
 
     _write_csv(os.path.join(DATA_DIR, args.win_out), WIN_FIELDS, rows)
     return rows
@@ -649,8 +657,8 @@ def cmd_windows(args, cfg0: LinkConfig):
 def _write_markdown(path: str, rows: list[dict]):
     """Paper-ready table: measurement and model in one row, CI attached."""
     lines = [
-        "| Cấu hình | d [m] | L | λ [nm] | N qubit | P_click đo | P_click mô hình "
-        "| Tỉ số | QBER đo (CP 95 %) | QBER mô hình | Khớp |",
+        "| Configuration | d [m] | L | λ [nm] | N qubits | Measured P_click | Model P_click "
+        "| Ratio | Measured QBER (95% CP) | Model QBER | Match |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|:--:|",
     ]
     for r in rows:
@@ -672,26 +680,26 @@ def _write_markdown(path: str, rows: list[dict]):
 # ═══════════════════════════════════════════════════════════════════════════
 def main():
     ap = argparse.ArgumentParser(
-        description="Bảng mô phỏng UWOC-BB84 và so sánh với số đo FPGA "
-                    "(KHÔNG mở cổng COM)")
-    ap.add_argument("--matrix", action="store_true", help="chỉ xuất bảng mô phỏng")
-    ap.add_argument("--compare", action="store_true", help="chỉ xuất bảng so sánh")
+        description="UWOC-BB84 simulation tables and comparison against FPGA measurements "
+                    "(DOES NOT open the COM port)")
+    ap.add_argument("--matrix", action="store_true", help="output only the simulation table")
+    ap.add_argument("--compare", action="store_true", help="output only the comparison table")
     ap.add_argument("--blocks", dest="do_blocks", action="store_true",
-                    help="chỉ xuất bảng thống kê theo KHỐI KẾT HỢP (cần số liệu "
-                         "thu bằng bitstream [v12] với --coh >= 1)")
+                    help="output only the COHERENCE-BLOCK statistics table (requires data "
+                         "acquired using the [v12] bitstream with --coh >= 1)")
     ap.add_argument("--waters", default=",".join(WATER_ORDER))
     ap.add_argument("--turbs", default="1,2,3,4,5")
     ap.add_argument("--lams", default="450")
     ap.add_argument("--mu", type=float, default=0.1)
     ap.add_argument("--windows", type=int, default=4000,
-                    help="số cửa sổ Monte-Carlo cho thống kê σQBER/outage")
+                    help="number of Monte Carlo windows for σQBER/outage statistics")
     ap.add_argument("--mc", type=int, default=0,
-                    help="thêm cột Monte-Carlo mức qubit, N xung mỗi điểm "
-                         "(0 = tắt; chỉ để kiểm tra lại phần giải tích)")
+                    help="add qubit-level Monte Carlo columns, N pulses per point "
+                         "(0 = disabled; only for checking the analytical calculation)")
     ap.add_argument("--points", default="fpga_points.csv",
-                    help="file số đo trong thư mục --data")
+                    help="measurement file inside the --data directory")
     ap.add_argument("--data", default=None,
-                    help="thư mục số liệu (mặc định <repo>/data)")
+                    help="data directory (default: <repo>/data)")
     ap.add_argument("--sim-out", dest="sim_out", default="sim_table.csv")
     ap.add_argument("--cmp-out", dest="cmp_out", default="compare_table.csv")
     ap.add_argument("--win-out", dest="win_out", default="block_table.csv")
@@ -705,9 +713,9 @@ def main():
     both = not (args.matrix or args.compare or args.do_blocks)
 
     print("█" * 108)
-    print("  BẢNG MÔ PHỎNG / SO SÁNH — μ = %g, η_det = %g, Y₀ = %.2e, "
+    print("  SIMULATION / COMPARISON TABLES — μ = %g, η_det = %g, Y₀ = %.2e, "
           "f_rep = %.0e Hz" % (cfg0.mu, cfg0.eta_det, cfg0.Y0, cfg0.f_rep))
-    print("  giới hạn QBER = %.0f%%, giới hạn outage = %.0f%%, CP %.0f%%"
+    print("  QBER limit = %.0f%%, outage limit = %.0f%%, CP %.0f%%"
           % (100 * QBER_LIMIT, 100 * OUTAGE_LIMIT, 100 * CONF))
     print("█" * 108)
 
