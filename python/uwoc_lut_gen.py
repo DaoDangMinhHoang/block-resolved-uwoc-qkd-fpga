@@ -364,16 +364,16 @@ def emit_verilog(tabs: dict, cfg: LinkConfig, window: int, path: str):
 
 def verify(tabs: dict, cfg: LinkConfig, window: int) -> bool:
     print("\n" + "═" * 78)
-    print("  KIỂM CHỨNG ROM — bảng 12-bit vs mô hình float")
+    print("  ROM VERIFICATION — 12-bit tables vs floating-point model")
     print("═" * 78)
     rng = np.random.default_rng(2024)
     ok = True
 
-    print(f"\n  (a) inverse-CDF h_s (Gamma) — {ROM_DEPTH} mức, {H_BITS}-bit"
-          f" (h tối đa biểu diễn được = {H_MAX/H_MEAN:.2f})")
-    print(f"      {'class':>6}{'σ_s²':>9}{'h_max lt':>10}{'E[h] ROM':>11}"
-          f"{'σ² ROM':>10}{'sai số E[h]':>13}{'sai số σ²':>12}")
-    print("      " + "-" * 72)
+    print(f"\n  (a) inverse-CDF h_s (Gamma) — {ROM_DEPTH} levels, {H_BITS}-bit"
+          f" (maximum representable h = {H_MAX/H_MEAN:.2f})")
+    print(f"      {'class':>6}{'σ_s²':>9}{'theoretical h_max':>18}{'E[h] ROM':>11}"
+          f"{'σ² ROM':>10}{'E[h] error':>13}{'σ² error':>12}")
+    print("      " + "-" * 80)
     for i, s2 in enumerate(HS_CLASS_SIGMA2):
         v = np.array(tabs["hs_rom"][i], dtype=float) / H_MEAN
         m, var = v.mean(), v.var() / max(v.mean() ** 2, 1e-12)
@@ -382,14 +382,14 @@ def verify(tabs: dict, cfg: LinkConfig, window: int) -> bool:
         e_m = abs(m - 1.0) * 100
         e_v = abs(var - s2) / max(s2, 1e-9) * 100 if s2 > 0 else 0.0
         ok &= (e_m < 5.0 and (e_v < 10.0 or s2 == 0))
-        print(f"      {i:>6}{s2:>9.3f}{hmax:>10.2f}{m:>11.4f}{var:>10.4f}"
+        print(f"      {i:>6}{s2:>9.3f}{hmax:>18.2f}{m:>11.4f}{var:>10.4f}"
               f"{e_m:>12.2f}%{e_v:>11.2f}%")
 
-    print(f"\n  (b) inverse-CDF h_o — {ROM_DEPTH} mức, {H_BITS}-bit"
-          " (hàng 6-7: đối chứng họ phân bố cùng σ²)")
-    print(f"      {'row':>6}{'σ²_ho':>10}{'phân bố':>11}{'E[h] ROM':>11}"
-          f"{'σ² ROM':>10}{'sai số E[h]':>13}{'sai số σ²':>12}")
-    print("      " + "-" * 72)
+    print(f"\n  (b) inverse-CDF h_o — {ROM_DEPTH} levels, {H_BITS}-bit"
+          " (rows 6-7: matched-variance distribution-family controls)")
+    print(f"      {'row':>6}{'σ²_ho':>10}{'distribution':>13}{'E[h] ROM':>11}"
+          f"{'σ² ROM':>10}{'E[h] error':>13}{'σ² error':>12}")
+    print("      " + "-" * 74)
     for row, (name, s2, fam) in enumerate(tabs["ho_specs"]):
         v = np.array(tabs["ho_rom"][row], dtype=float) / H_MEAN
         m, var = v.mean(), v.var() / max(v.mean() ** 2, 1e-12)
@@ -397,13 +397,13 @@ def verify(tabs: dict, cfg: LinkConfig, window: int) -> bool:
         e_v = abs(var - s2) / max(s2, 1e-9) * 100 if s2 > 1e-6 else 0.0
         kind = {"none": "—", "lognormal": "LogNormal", "weibull": "Weibull"}[fam]
         ok &= (e_m < 5.0 and (e_v < 12.0 or s2 <= 1e-6))
-        print(f"      {row:>6}{s2:>10.4f}{kind:>11}{m:>11.4f}{var:>10.4f}"
+        print(f"      {row:>6}{s2:>10.4f}{kind:>13}{m:>11.4f}{var:>10.4f}"
               f"{e_m:>12.2f}%{e_v:>11.2f}%")
 
-    print(f"\n  (c) Mô hình vàng RTL-exact (chỉ số nguyên + ROM) vs float")
-    print("      Chỉ xét điểm làm việc CÒN SỐNG (P_click ≥ 1e-4); ở cự ly xa")
-    print("      hơn thì link đã chết vì suy hao, sai lệch chỉ là nhiễu bắn.")
-    print(f"      {'nước':<13}{'d':>6}{'lv':>4}{'P_click float':>15}"
+    print(f"\n  (c) RTL-exact golden model (integers + ROM only) vs floating-point model")
+    print("      Consider only VIABLE operating points (P_click ≥ 1e-4); at longer")
+    print("      ranges, the link is dead due to attenuation; deviations are only shot noise.")
+    print(f"      {'water':<13}{'d':>6}{'lv':>4}{'P_click float':>15}"
           f"{'P_click ROM':>14}{'#click':>9}{'QBER float':>12}"
           f"{'QBER ROM':>11}{'Δ':>8}")
     print("      " + "-" * 84)
@@ -427,11 +427,11 @@ def verify(tabs: dict, cfg: LinkConfig, window: int) -> bool:
                       f"{fl['p_click']:>15.4e}{rt['p_click']:>14.4e}"
                       f"{rt['n_click']:>9d}{fl['qber']*100:>11.2f}%"
                       f"{rt['qber']*100:>10.2f}%{dq:>7.2f}%")
-    print(f"      ({n_checked} điểm làm việc được kiểm tra)")
+    print(f"      ({n_checked} operating points checked)")
 
-    print(f"\n  {'ĐẠT' if ok else 'CẦN XEM LẠI'} — ROM đủ chính xác cho RTL")
-    print("  Ghi chú: P_click ROM < float ở nhiễu loạn mạnh là ĐÚNG — do fading")
-    print("  nặng đuôi, phần lớn mẫu h nằm DƯỚI trung bình (median < mean).")
+    print(f"\n  {'PASS' if ok else 'REVIEW NEEDED'} — ROM is sufficiently accurate for RTL")
+    print("  Note: P_click ROM < float under strong turbulence is CORRECT — because")
+    print("  fading is heavy-tailed; most h samples are BELOW the mean (median < mean).")
     return ok
 
 
@@ -485,13 +485,13 @@ def _rtl_exact_sim(tabs: dict, wi: int, di: int, turb_level: int,
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main():
-    ap = argparse.ArgumentParser(description="Sinh ROM UWOC cho FPGA")
+    ap = argparse.ArgumentParser(description="Generate UWOC ROM for FPGA")
     ap.add_argument("--out", default="verilog/uwoc_channel_rom.vh")
     ap.add_argument("--lam", type=int, default=450, choices=LAMBDA_OPTIONS)
-    ap.add_argument("--mu", type=float, default=0.1, help="μ danh định")
+    ap.add_argument("--mu", type=float, default=0.1, help="nominal μ")
     ap.add_argument("--window", type=int, default=65536,
-                    help="cửa sổ giám sát [attempt]; PHẢI là luỹ thừa 2 và "
-                         "khớp 2^ATTEMPT_LOG2 của channel_monitor.v")
+                    help="monitoring window [attempts]; MUST be a power of 2 and "
+                         "match 2^ATTEMPT_LOG2 in channel_monitor.v")
     ap.add_argument("--verify", action="store_true")
     args = ap.parse_args()
 
@@ -502,14 +502,14 @@ def main():
     print("  UWOC LUT GENERATOR")
     print(f"  λ={cfg.lam_nm} nm  μ_ref={cfg.mu}  η={cfg.eta_det}  "
           f"Y₀={cfg.Y0:.3e}")
-    print(f"  cửa sổ giám sát = {window:,} attempt")
+    print(f"  monitoring window = {window:,} attempts")
     print("█" * 78)
 
     tabs = build_tables(cfg, window)
 
-    print("\n  Bảng tra theo (loại nước, cự ly):")
-    print(f"  {'nước':<13}{'idx':>4}{'d [m]':>8}{'σ_s²':>10}{'lớp':>5}"
-          f"{'P_sig':>12}{'e_pol':>9}{'E[click]/cs':>13}")
+    print("\n  Lookup table by (water type, range):")
+    print(f"  {'water':<13}{'idx':>4}{'d [m]':>8}{'σ_s²':>10}{'class':>5}"
+          f"{'P_sig':>12}{'e_pol':>9}{'E[click]/window':>13}")
     print("  " + "-" * 76)
     for (water, di, d, s2s, cls, psig, ep, exp_c) in tabs["meta"]:
         if di % 3 == 0 or di == N_DIST - 1:
@@ -517,15 +517,15 @@ def main():
                   f"{psig:>12.3e}{ep*100:>8.2f}%{exp_c:>13.1f}")
 
     n_bits = emit_verilog(tabs, cfg, window, args.out)
-    print(f"\n  ✔ Đã ghi {args.out}")
-    print(f"    Tổng dung lượng ROM ≈ {n_bits:,} bit "
-          f"= {n_bits/4096:.1f} khối M4K (Cyclone II EP2C20 có 52 khối)")
+    print(f"\n  ✔ Wrote {args.out}")
+    print(f"    Total ROM capacity ≈ {n_bits:,} bits "
+          f"= {n_bits/4096:.1f} M4K blocks (Cyclone II EP2C20 has 52 blocks)")
 
     good = True
     if args.verify:
         good = verify(tabs, cfg, window)
 
-    print("\n  Bước tiếp theo: biên dịch verilog/uwoc_channel.v trong Quartus")
+    print("\n  Next step: compile verilog/uwoc_channel.v in Quartus")
     return 0 if good else 1
 
 
