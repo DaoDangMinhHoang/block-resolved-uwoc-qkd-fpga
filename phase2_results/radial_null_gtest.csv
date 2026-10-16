@@ -1,0 +1,2 @@
+water,dist_idx,lambda_sel,mu_level,mu_gain_log2,decoy_enable,coh_sel,attempt_log2,groups,levels,G_total,dof,p_global,p_min_level,p_min_bonferroni
+0,4,0,8,0,0,11,16,7,L1 L2 L3 L4 L5 WB@L3 LN@L4,60.77841017482096,49,0.12057889415238299,0.033796006251362316,0.23657204375953622

@@ -1,0 +1,14 @@
+water,offset,ranges_m,L3_command_runs_row
+clear ocean,-2,5,1
+clear ocean,-1,10,2
+clear ocean,0,15-25,3
+clear ocean,1,30-55,4
+clear ocean,2,60-80,5
+coastal,-3,2-4,1
+coastal,-2,6,1
+coastal,-1,8-13,2
+coastal,0,16-28,3
+coastal,1,31-43,4
+harbor,-3,0.5-4,1
+harbor,-2,4.5-7,1
+harbor,-1,8-10,2
