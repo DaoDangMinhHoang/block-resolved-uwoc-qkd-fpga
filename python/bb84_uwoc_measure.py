@@ -129,7 +129,7 @@ class FPGASource:
     def __init__(self, port: str, baud: int = 460800, chunk: int = 1,
                  timeout: float = 0.005):
         if not HAS_SERIAL:
-            raise RuntimeError("Cần: pip install pyserial")
+            raise RuntimeError("Required: pip install pyserial")
         # A click report line is 34 bytes ⇒ ~3 ms @115200. The timeout only needs
         # to exceed that; the surplus is time WASTED on every no-click qubit
         # (>99% of qubits underwater).
@@ -310,8 +310,8 @@ def _hdr(t):
 
 
 def _row_hdr():
-    print(f"  {'cấu hình':<26}{'click':>8}{'sift':>7}{'P_click':>11}"
-          f"{'QBER':>9}{'cận trên':>10}{'SKR/xung':>11}{'kết luận':>12}")
+    print(f"  {'configuration':<26}{'click':>8}{'sift':>7}{'P_click':>11}"
+          f"{'QBER':>9}{'upper bound':>12}{'SKR/pulse':>11}{'verdict':>12}")
     print("  " + "-" * 84)
 
 
@@ -319,16 +319,16 @@ def _row(tag, m):
     if not m["valid"]:
         verdict = f"n/a (<{MIN_SIFT})"
     elif m["secure"]:
-        verdict = "an toàn"
+        verdict = "secure"
     else:
-        verdict = "KHÔNG"
+        verdict = "NOT SECURE"
     print(f"  {tag:<26}{m['n_click']:>8}{m['n_sift']:>7}{m['p_click']:>11.3e}"
-          f"{m['qber']*100:>8.2f}%{m['qber_hi']*100:>9.2f}%"
+          f"{m['qber']*100:>8.2f}%{m['qber_hi']*100:>11.2f}%"
           f"{m['skr_per_pulse']:>11.3e}{verdict:>12}")
 
 
 def scan_distance(src, args, adaptive_pz):
-    _hdr(f"QUÉT CỰ LY — {WATER_TYPES[args.water].name}, nhiễu loạn L{args.turb}")
+    _hdr(f"DISTANCE SWEEP — {WATER_TYPES[args.water].name}, turbulence L{args.turb}")
     print(f"  c(λ) = {WATER_TYPES[args.water].c:.3f} m⁻¹, "
           f"λ = {LAMBDA_OPTIONS[args.lam]} nm, batch = {args.batch}")
     _row_hdr()
@@ -347,14 +347,14 @@ def scan_distance(src, args, adaptive_pz):
         # even if they happen to show a low QBER purely from too few samples.
         if not m["secure"]:
             stop = True
-    print(f"\n  Cự ly bảo mật lớn nhất (liên tục): {last_secure:g} m")
-    print(f"  Batch = {args.batch}. {MIN_SIFT} bit đã sàng chỉ đủ để KHÔNG kết luận bừa,")
-    print("  chưa đủ để ĐO. Muốn sai số ~0.4% quanh QBER ~1.6% thì cần n_sift ≳ 1000,")
-    print("  tức batch ≳ 1000/(P_click·q_basis) — cỡ 2·10⁵ ở cự ly ngắn, nhiều hơn ở xa.")
+    print(f"\n  Maximum secure distance (contiguous): {last_secure:g} m")
+    print(f"  Batch = {args.batch}. {MIN_SIFT} sifted bits suffice only to AVOID a rash conclusion,")
+    print("  not to MEASURE. For ~0.4% error around QBER ~1.6%, n_sift ≳ 1000 is needed,")
+    print("  i.e. batch ≳ 1000/(P_click·q_basis) — about 2·10⁵ at short range, more at longer ranges.")
 
 
 def scan_turbulence(src, args, adaptive_pz):
-    _hdr(f"QUÉT NHIỄU LOẠN — {WATER_TYPES[args.water].name}, "
+    _hdr(f"TURBULENCE SWEEP — {WATER_TYPES[args.water].name}, "
          f"d = {WATER_TYPES[args.water].d_grid[args.dist]:g} m")
     _row_hdr()
     wi = WATER_ORDER.index(args.water)
@@ -362,15 +362,15 @@ def scan_turbulence(src, args, adaptive_pz):
         src.configure(wi, args.dist, lv, args.lam)
         m = src.collect(args.batch, args.pz, args.seed + lv)
         _row(f"L{lv} {OCEAN_TURB_LEVELS[lv]['name']}", m)
-    print("\n  Lưu ý: QBER TRUNG BÌNH ít nhạy với mức nhiễu loạn (P_click gần")
-    print("  tuyến tính theo h nên kỳ vọng triệt tiêu fading). Nhiễu loạn lộ ra")
-    print("  ở BIẾN ĐỘNG giữa các cửa sổ — xem verify_window_statistics() trong")
-    print("  uwoc_channel_model.py, và ngõ ra qber_jitter của channel_monitor.")
+    print("\n  Note: MEAN QBER is not very sensitive to the turbulence level (P_click is nearly")
+    print("  linear in h, so fading cancels in expectation). Turbulence appears in the")
+    print("  VARIABILITY between windows — see verify_window_statistics() in")
+    print("  uwoc_channel_model.py and the qber_jitter output of channel_monitor.")
 
 
 def scan_wavelength(src, args, adaptive_pz):
-    _hdr("QUÉT BƯỚC SÓNG — λ tối ưu phụ thuộc loại nước")
-    print("  Kỳ vọng [1] §I: clear ocean ưu blue-green; nước đục dịch về red.")
+    _hdr("WAVELENGTH SWEEP — optimal λ depends on water type")
+    print("  Expected from [1] §I: clear ocean favors blue-green; turbid water shifts toward red.")
     for water in WATER_ORDER:
         wi = WATER_ORDER.index(water)
         # pick a range around 60% of the secure range so the link survives at every λ
@@ -385,17 +385,17 @@ def scan_wavelength(src, args, adaptive_pz):
             _row(f"λ = {lam} nm", m)
             if m["skr_per_pulse"] > best_skr:
                 best_skr, best = m["skr_per_pulse"], lam
-        print(f"    → λ tốt nhất: {best} nm")
+        print(f"    → best λ: {best} nm")
 
 
 def scan_mu(src, args, adaptive_pz):
-    _hdr("QUÉT CƯỜNG ĐỘ μ — đánh đổi tốc độ khoá vs rủi ro PNS")
-    print("  μ lớn: QBER giảm (n̄ ≫ Y₀) nhưng tỉ lệ xung ĐA PHOTON tăng.")
-    print("  Dưới nước suy hao khổng lồ giúp Eve giấu tấn công PNS dễ hơn nhiều")
-    print("  so với khí quyển ⇒ μ phải bị kẹp trần (MU_CAP trong controller).\n")
+    _hdr("INTENSITY SWEEP μ — key-rate versus PNS-risk trade-off")
+    print("  Higher μ lowers QBER (n̄ ≫ Y₀), but increases the MULTI-PHOTON pulse fraction.")
+    print("  Enormous underwater attenuation makes it far easier for Eve to conceal a PNS attack")
+    print("  than in the atmosphere ⇒ μ must be capped (MU_CAP in the controller).\n")
     wi = WATER_ORDER.index(args.water)
     print(f"  {'μ':>7}{'P(n≥2 | n≥1)':>16}{'P_click':>12}{'QBER':>9}"
-          f"{'SKR/xung':>12}{'an toàn':>9}")
+          f"{'SKR/pulse':>12}{'secure':>9}")
     print("  " + "-" * 68)
     base = src.cfg if hasattr(src, "cfg") else LinkConfig()
     for mu in (0.05, 0.1, 0.2, 0.4, 0.8):
@@ -417,40 +417,40 @@ SCANS = {"distance": scan_distance, "turbulence": scan_turbulence,
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Đo BB84 qua kênh UWOC")
-    ap.add_argument("--port", help="cổng COM của FPGA (vd COM28)")
+    ap = argparse.ArgumentParser(description="Measure BB84 over the UWOC channel")
+    ap.add_argument("--port", help="FPGA COM port (e.g. COM28)")
     # [Q2] 460800, matching uart_rx/uart_tx in top_module.v. The old 115200
     # default silently decodes nothing on the current bitstream.
     ap.add_argument("--baud", type=int, default=460800)
     ap.add_argument("--simulate", action="store_true")
     ap.add_argument("--scan", default="distance", choices=list(SCANS))
     ap.add_argument("--water", default="clear_ocean", choices=WATER_ORDER)
-    ap.add_argument("--dist", type=int, default=2, help="chỉ số cự ly 0–15")
+    ap.add_argument("--dist", type=int, default=2, help="range index 0–15")
     ap.add_argument("--turb", type=int, default=3, choices=range(1, 6))
     ap.add_argument("--lam", type=int, default=0, choices=range(3),
                     help="0=450nm, 1=532nm, 2=650nm")
-    ap.add_argument("--pz", type=float, default=0.5, help="P(chọn basis Z)")
+    ap.add_argument("--pz", type=float, default=0.5, help="P(choosing the Z basis)")
     ap.add_argument("--mu", type=float, default=0.1)
     ap.add_argument("--batch", type=int, default=50000)
     ap.add_argument("--chunk", type=int, default=1,
-                    help="số lệnh qubit gửi liên tiếp (FPGA mode). Mặc định 1 "
-                         "và KHÔNG chậm hơn — vòng lặp bị chặn bởi --timeout, "
-                         "không phải bởi FPGA. Chunk > 1 chỉ an toàn với "
-                         "top_module.v [v11] (FIFO lệnh 64 mức; đã kiểm tới 64 "
-                         "bằng tb_cmd_fifo.v). Chunk lớn trên bitstream cũ làm "
-                         "MẤT lệnh âm thầm và ép P_click xuống ~0.4 lần.")
+                    help="number of consecutive qubit commands sent (FPGA mode). The default is 1 "
+                         "and is NOT slower — the loop is limited by --timeout, "
+                         "not by the FPGA. Chunk > 1 is safe only with "
+                         "top_module.v [v11] (64-deep command FIFO; verified up to 64 "
+                         "with tb_cmd_fifo.v). Large chunks on an older bitstream "
+                         "silently DROP commands and force P_click down to ~0.4 times its value.")
     ap.add_argument("--timeout", type=float, default=0.005,
-                    help="thời gian chờ dòng báo cáo mỗi qubit, giây (FPGA "
-                         "mode). Dòng dài 34 byte ≈ 3 ms @115200. Dòng tới "
-                         "muộn không bị mất (vòng sau đọc được, cuối batch có "
-                         "bước xả). Nếu Latency Timer của cổng USB-serial vẫn "
-                         "là 16 ms mặc định thì hạ xuống 1 ms mới thấy tác dụng.")
-    ap.add_argument("--step", type=int, default=2, help="bước quét cự ly")
+                    help="time to wait for each qubit report line, in seconds (FPGA "
+                         "mode). A 34-byte line takes ≈ 3 ms @115200. Late lines "
+                         "are not lost (the next loop iteration reads them, and the "
+                         "batch ends with a buffer drain). If the USB-serial port's "
+                         "Latency Timer is still at its default 16 ms, lower it to 1 ms to see an effect.")
+    ap.add_argument("--step", type=int, default=2, help="range-sweep step")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
     if not args.port and not args.simulate:
-        ap.error("cần --port <COM> hoặc --simulate")
+        ap.error("--port <COM> or --simulate is required")
 
     cfg = LinkConfig(lam_nm=LAMBDA_OPTIONS[args.lam], mu=args.mu)
     src = (FPGASource(args.port, args.baud, chunk=args.chunk,
@@ -459,14 +459,14 @@ def main():
     tag = "FPGA" if args.port else "SIM"
 
     print("█" * 82)
-    print(f"  BB84 QUA KÊNH UWOC — nguồn: {tag}")
+    print(f"  BB84 OVER THE UWOC CHANNEL — source: {tag}")
     print(f"  μ={cfg.mu}  η_det={cfg.eta_det}  Y₀={cfg.Y0:.2e}  "
           f"f_rep={cfg.f_rep:.0e} Hz  p_z={args.pz}")
-    print(f"  cận trên QBER = Clopper–Pearson {CONF*100:.0f}% một phía; "
-          f"'an toàn' ⟺ cận trên < {QBER_LIMIT*100:.0f}%")
+    print(f"  QBER upper bound = one-sided Clopper–Pearson {CONF*100:.0f}%; "
+          f"'secure' ⟺ upper bound < {QBER_LIMIT*100:.0f}%")
     if args.port:
         print(f"  timeout={args.timeout*1000:.0f} ms  chunk={args.chunk}"
-              + ("   ⚠ chunk>1 cần bitstream có FIFO lệnh (top_module.v v11)"
+              + ("   ⚠ chunk>1 requires a bitstream with a command FIFO (top_module.v v11)"
                  if args.chunk > 1 else ""))
     print("█" * 82)
 
@@ -476,8 +476,8 @@ def main():
         src.close()
 
     if args.simulate:
-        _hdr("THAM CHIẾU GIẢI TÍCH — cự ly bảo mật tối đa d_max [m]")
-        print(f"  {'Nước':<17}" + "".join(f"{'L'+str(l):>9}" for l in range(1, 6)))
+        _hdr("ANALYTICAL REFERENCE — maximum secure distance d_max [m]")
+        print(f"  {'Water':<17}" + "".join(f"{'L'+str(l):>9}" for l in range(1, 6)))
         print("  " + "-" * 64)
         for w in WATER_ORDER:
             row = [max_secure_distance(w, lv, cfg, criterion="outage")
